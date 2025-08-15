@@ -1,6 +1,12 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
+// import VoiceRecorder from '../components/VoiceRecorder';
+import dynamic from "next/dynamic";
+// SSR-гүйгээр client-side-д ачааллуулах
+const VoiceRecorder = dynamic(() => import('../components/VoiceRecorder'), {
+  ssr: false,
+});
 
 const SpeechToTextMongolian: React.FC = () => {
   const expectedText =
@@ -169,6 +175,7 @@ const SpeechToTextMongolian: React.FC = () => {
             {accuracy}%
           </span>
         </p>
+        <VoiceRecorder />
       </div>
     </div>
   );
