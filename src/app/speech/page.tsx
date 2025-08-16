@@ -1,182 +1,90 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-// import VoiceRecorder from '../components/VoiceRecorder';
-import dynamic from "next/dynamic";
-// SSR-гүйгээр client-side-д ачааллуулах
-const VoiceRecorder = dynamic(() => import('../components/VoiceRecorder'), {
-  ssr: false,
-});
+import dynamic from 'next/dynamic';
+
+import type { VoiceRecorderHandle } from '../../components/VoiceRecorder';
+import { compareTexts } from '@/utils/compareTexts';
+import ExpectedText from '@/components/ExpectedText';
+import ControlButtons from '@/components/ControlButtons';
+import TranscriptBox from '@/components/TranscriptBox';
+import ResultStats from '@/components/ResultStats';
+import { createRecognition } from '@/utils/recognitionHandler';
+
+const VoiceRecorder = dynamic(() => import('../../components/VoiceRecorder'), { ssr: false });
 
 const SpeechToTextMongolian: React.FC = () => {
-  const expectedText =
-    'Монгол Улс нь төв Азийн зүрхэн цэгт оршдог далайд гарцгүй улс юм. Улаанбаатар хот нь тус улсын нийслэл бөгөөд хүн амын дийлэнх нь тэнд амьдардаг.';
-  const [listening, setListening] = useState(false);
+  const [sentence, setSentence] = useState<{ id: number; text: string; readCount: number } | null>(null);
   const [fullTranscript, setFullTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
-  const recognition = useRef<SpeechRecognition | null>(null);
+  const [listening, setListening] = useState(false);
+  const recorderRef = useRef<VoiceRecorderHandle>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
-    const SpeechRecognitionConstructor =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    recognitionRef.current = createRecognition(setFullTranscript, setInterimTranscript, setListening);
+    fetchNextSentence();
 
-    if (!SpeechRecognitionConstructor) {
-      alert('Таны браузер ярианы таних функцийг дэмжихгүй байна!');
-      return;
-    }
-
-    recognition.current = new SpeechRecognitionConstructor();
-    recognition.current.lang = 'mn-MN';
-    recognition.current.interimResults = true;
-    recognition.current.continuous = true;
-
-    recognition.current.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = '';
-      let final = '';
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          final += result[0].transcript + ' ';
-        } else {
-          interim += result[0].transcript;
-        }
-      }
-
-      setFullTranscript((prev) => prev + final);
-      setInterimTranscript(interim);
-    };
-
-    recognition.current.onerror = (event: any) => {
-      console.error('Speech recognition error', event);
-    };
-
-    recognition.current.onend = () => {
-      setListening(false);
-    };
-
-    return () => {
-      recognition.current?.stop();
-    };
+    return () => recognitionRef.current?.stop();
   }, []);
 
-  const toggleListening = () => {
-    if (!recognition.current) return;
-
-    if (listening) {
-      recognition.current.stop();
-      setListening(false);
-      setInterimTranscript('');
-    } else {
-      recognition.current.start();
-      setListening(true);
-    }
+  const fetchNextSentence = async () => {
+    const res = await fetch('/api/sentences');
+    const data = await res.json();
+    if (data.success) setSentence({ ...data.sentence, readCount: data.sentence.readCount });
   };
 
-  const clearText = () => {
+  const handleSaveAndNext = async () => {
+    if (!sentence) return;
+    await fetch('/api/sentences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: sentence.id }),
+    });
     setFullTranscript('');
     setInterimTranscript('');
+    setListening(false);
+    recognitionRef.current?.stop();
+    fetchNextSentence();
   };
 
-  // === 🧠 Харьцуулалт ===
-  const compareTexts = () => {
-    const expectedWords = expectedText.trim().toLowerCase().split(/\s+/);
-    const actualWords = fullTranscript.trim().toLowerCase().split(/\s+/);
-
-    let matchCount = 0;
-    expectedWords.forEach((word, index) => {
-      if (word === actualWords[index]) {
-        matchCount++;
-      }
-    });
-
-    const accuracy = ((matchCount / expectedWords.length) * 100).toFixed(2);
-
-    return {
-      matchCount,
-      total: expectedWords.length,
-      accuracy,
-    };
-  };
-
-  const { matchCount, total, accuracy } = compareTexts();
+  const { matchCount, total, accuracy } = compareTexts(sentence?.text || '', fullTranscript);
 
   return (
-    <div style={{ maxWidth: 700, margin: '30px auto', fontFamily: 'Arial, sans-serif' }}>
-      <h1 style={{ textAlign: 'center', marginBottom: 20 }}>Монгол яриаг текст рүү</h1>
+    <div className="max-w-xl mx-auto mt-8 font-sans space-y-6">
+      <h1 className="text-center text-2xl font-bold">Монгол яриаг текст рүү</h1>
 
-      <div style={{ marginBottom: 20 }}>
-        <h3>📌 Унших өгүүлбэр:</h3>
-        <p
-          style={{
-            background: '#161616ff',
-            padding: 15,
-            borderRadius: 8,
-            lineHeight: 1.6,
-          }}
-        >
-          {expectedText}
-        </p>
-      </div>
+      {sentence && <ExpectedText expectedText={sentence.text} actualText={fullTranscript} />}
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 15, marginBottom: 20 }}>
-        <button
-          onClick={toggleListening}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: listening ? '#d9534f' : '#0275d8',
-            color: 'white',
-            border: 'none',
-            borderRadius: 5,
-            cursor: 'pointer',
-            fontWeight: 'bold',
-          }}
-        >
-          {listening ? 'Зогсоох' : 'Ярих'}
+      <ControlButtons listening={listening} onToggle={() => {
+          if (listening) {
+            recognitionRef.current?.stop();
+            recorderRef.current?.stop();
+            setListening(false);
+          } else {
+            recognitionRef.current?.start();
+            recorderRef.current?.start();
+            setListening(true);
+          }
+        }} onClear={() => {
+          setFullTranscript('');
+          setInterimTranscript('');
+        }} />
+
+      <TranscriptBox fullTranscript={fullTranscript} interimTranscript={interimTranscript} />
+
+      <ResultStats matchCount={matchCount} total={total} accuracy={accuracy}>
+        <VoiceRecorder ref={recorderRef} />
+        <button onClick={handleSaveAndNext} className="mt-4 px-5 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">
+          Хадгалах ба Дараагийн
         </button>
-        <button
-          onClick={clearText}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#5bc0de',
-            color: 'white',
-            border: 'none',
-            borderRadius: 5,
-            cursor: 'pointer',
-            fontWeight: 'bold',
-          }}
-        >
-          Цэвэрлэх
-        </button>
-      </div>
+      </ResultStats>
 
-      <div
-        style={{
-          minHeight: 120,
-          border: '2px solid #ddd',
-          borderRadius: 8,
-          padding: 15,
-          backgroundColor: '#252525ff',
-          boxShadow: 'inset 0 0 5px #ccc',
-        }}
-      >
-        <h3>🗣️ Танигдсан текст:</h3>
-        <p>{fullTranscript}</p>
-        <p style={{ color: '#111111ff', fontStyle: 'italic' }}>{interimTranscript}</p>
-      </div>
-
-      <div style={{ marginTop: 30, padding: 15, backgroundColor: '#1d1c1cff', borderRadius: 8 }}>
-        <h3>📊 Үр дүн:</h3>
-        <p>Нийт үгс: {total}</p>
-        <p>Зөв таарсан үгс: {matchCount}</p>
-        <p>
-          🎯 Нарийвчлал (Accuracy):{' '}
-          <span style={{ fontWeight: 'bold', color: accuracy === '100.00' ? 'green' : 'orange' }}>
-            {accuracy}%
-          </span>
+      {sentence && (
+        <p className="text-sm text-center text-gray-600">
+          Энэ өгүүлбэрийг уншсан удаа: <span className="font-bold">{sentence.readCount}</span>
         </p>
-        <VoiceRecorder />
-      </div>
+      )}
     </div>
   );
 };
