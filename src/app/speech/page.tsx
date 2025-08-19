@@ -14,6 +14,7 @@ import { createRecognition } from '@/utils/recognitionHandler';
 const VoiceRecorder = dynamic(() => import('../../components/VoiceRecorder'), { ssr: false });
 
 const SpeechToTextMongolian: React.FC = () => {
+  const [startTime, setStartTime] = useState<Date | null>(null);
   const [sentence, setSentence] = useState<{ id: number; text: string; readCount: number } | null>(null);
   const [fullTranscript, setFullTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
@@ -35,57 +36,95 @@ const SpeechToTextMongolian: React.FC = () => {
   };
 
   const handleSaveAndNext = async () => {
-    if (!sentence) return;
-    await fetch('/api/sentences', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: sentence.id }),
-    });
-    setFullTranscript('');
-    setInterimTranscript('');
-    setListening(false);
-    recognitionRef.current?.stop();
-    fetchNextSentence();
+  if (!sentence) return;
+
+  const audioUrl = recorderRef.current?.getMediaBlobUrl() || null;
+
+  const payload = {
+    sentences: sentence.text,
+    accuracy,
+    audio: audioUrl,
+    startTime: startTime?.toISOString() || null,
+    endTime: new Date().toISOString(),
+    profileId: 1, // 🟢 Гараас шууд 1 гэж өгч байна
   };
+
+  await fetch('/api/readings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  setFullTranscript('');
+  setInterimTranscript('');
+  setListening(false);
+  setStartTime(null); // 🟢 дараагийнд бэлтгэнэ
+  recognitionRef.current?.stop();
+  recorderRef.current?.stop();
+  fetchNextSentence();
+};
+
 
   const { matchCount, total, accuracy } = compareTexts(sentence?.text || '', fullTranscript);
 
+  
   return (
-    <div className="max-w-xl mx-auto mt-8 font-sans space-y-6">
-      <h1 className="text-center text-2xl font-bold">Монгол яриаг текст рүү</h1>
+    <div className="max-w-md mx-auto mt-6 px-4 py-6 bg-white rounded-2xl shadow-lg font-sans space-y-6">
+  <h1 className="text-center text-3xl font-extrabold text-pink-500">
+    Монгол яриаг текст рүү
+  </h1>
 
-      {sentence && <ExpectedText expectedText={sentence.text} actualText={fullTranscript} />}
+  {sentence && (
+    <ExpectedText
+      expectedText={sentence.text}
+      actualText={fullTranscript}
+    />
+  )}
 
-      <ControlButtons listening={listening} onToggle={() => {
-          if (listening) {
-            recognitionRef.current?.stop();
-            recorderRef.current?.stop();
-            setListening(false);
-          } else {
-            recognitionRef.current?.start();
-            recorderRef.current?.start();
-            setListening(true);
-          }
-        }} onClear={() => {
-          setFullTranscript('');
-          setInterimTranscript('');
-        }} />
+  <ControlButtons
+  listening={listening}
+  onToggle={() => {
+    if (listening) {
+      recognitionRef.current?.stop();
+      recorderRef.current?.stop();
+      setListening(false);
+    } else {
+      setStartTime(new Date()); // 🟢 ЭНЭ
+      recognitionRef.current?.start();
+      recorderRef.current?.start();
+      setListening(true);
+    }
+  }}
+  onClear={() => {
+    setFullTranscript('');
+    setInterimTranscript('');
+  }}
+/>
 
-      <TranscriptBox fullTranscript={fullTranscript} interimTranscript={interimTranscript} />
 
-      <ResultStats matchCount={matchCount} total={total} accuracy={accuracy}>
-        <VoiceRecorder ref={recorderRef} />
-        <button onClick={handleSaveAndNext} className="mt-4 px-5 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">
-          Хадгалах ба Дараагийн
-        </button>
-      </ResultStats>
+  <TranscriptBox
+    fullTranscript={fullTranscript}
+    interimTranscript={interimTranscript}
+  />
 
-      {sentence && (
-        <p className="text-sm text-center text-gray-600">
-          Энэ өгүүлбэрийг уншсан удаа: <span className="font-bold">{sentence.readCount}</span>
-        </p>
-      )}
-    </div>
+  <ResultStats matchCount={matchCount} total={total} accuracy={accuracy}>
+    <VoiceRecorder ref={recorderRef} />
+
+    <button
+      onClick={handleSaveAndNext}
+      className="block w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white text-lg font-semibold rounded-full shadow transition"
+    >
+      ✅ Хадгалах ба Дараагийн
+    </button>
+  </ResultStats>
+
+  {sentence && (
+    <p className="text-center text-sm text-gray-600">
+      📚 Энэ өгүүлбэрийг уншсан удаа: <span className="font-bold text-purple-600">{sentence.readCount}</span>
+    </p>
+  )}
+</div>
+
   );
 };
 

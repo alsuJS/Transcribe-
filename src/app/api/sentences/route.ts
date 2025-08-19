@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Симуляцийн хадгалалт (жинхэнэ DB биш)
 // Жишээ зориулалттай
 let sentencesDB = [
-  { id: 1, text: 'Монгол Улс нь төв Азийн зүрхэн цэг...', readCount: 0 },
+  { id: 1, text: 'Монгол Улс нь төв Азийн зүрхэн цэгт', readCount: 0 },
   { id: 2, text: 'Улаанбаатар нь хүн амын төвлөрөл ихтэй...', readCount: 0 },
 ];
 
