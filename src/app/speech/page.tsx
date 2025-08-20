@@ -21,6 +21,8 @@ const SpeechToTextMongolian: React.FC = () => {
   const [listening, setListening] = useState(false);
   const recorderRef = useRef<VoiceRecorderHandle>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+
 
   useEffect(() => {
     recognitionRef.current = createRecognition(setFullTranscript, setInterimTranscript, setListening);
@@ -38,12 +40,12 @@ const SpeechToTextMongolian: React.FC = () => {
   const handleSaveAndNext = async () => {
   if (!sentence) return;
 
-  const audioUrl = recorderRef.current?.getMediaBlobUrl() || null;
+  // const audioUrl = recorderRef.current?.getMediaBlobUrl() || null;
 
   const payload = {
     sentences: sentence.text,
     accuracy,
-    audio: audioUrl,
+    audio: audioUrl, // ✅ Cloudinary URL ашиглаж байна
     startTime: startTime?.toISOString() || null,
     endTime: new Date().toISOString(),
     profileId: 1, // 🟢 Гараас шууд 1 гэж өгч байна
@@ -108,7 +110,13 @@ const SpeechToTextMongolian: React.FC = () => {
   />
 
   <ResultStats matchCount={matchCount} total={total} accuracy={accuracy}>
-    <VoiceRecorder ref={recorderRef} />
+    <VoiceRecorder
+  ref={recorderRef}
+  onUploadComplete={(url) => {
+    console.log("🎤 Upload болсон аудио URL:", url);
+    setAudioUrl(url || null); // state-д хадгалах
+  }}
+/>
 
     <button
       onClick={handleSaveAndNext}
@@ -117,6 +125,19 @@ const SpeechToTextMongolian: React.FC = () => {
       ✅ Хадгалах ба Дараагийн
     </button>
   </ResultStats>
+  {audioUrl && (
+  <div className="mt-4 text-center space-y-2">
+    <audio src={audioUrl} controls className="w-full rounded" />
+    <a
+      href={audioUrl}
+      download="recording.webm"
+      className="text-blue-600 underline text-sm"
+    >
+      ⬇️ Татаж авах
+    </a>
+  </div>
+)}
+
 
   {sentence && (
     <p className="text-center text-sm text-gray-600">
