@@ -15,8 +15,11 @@ export default function Home() {
   ];
 
   useEffect(() => {
-    QRCode.toDataURL(amount)
-      .then((url) => setQrUrl(url))
+    QRCode.toDataURL("https://alsu.app.n8n.cloud/webhook/payment-check")
+      .then((url) => {
+        console.log(url);
+        setQrUrl(url);
+      })
       .catch((err) => console.error(err));
   }, [amount]);
 
@@ -43,7 +46,9 @@ export default function Home() {
         {qrUrl && (
           <>
             <img src={qrUrl} alt="QR Code" />
-            <p>QR утга: <code>{amount}</code></p>
+            <p>
+              QR утга: <code>{amount}</code>
+            </p>
           </>
         )}
       </div>
